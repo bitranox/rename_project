@@ -19,6 +19,8 @@ from rename_project.renamer import (
     rename_project,
 )
 
+from .typed_click import option
+
 console = Console()
 
 
@@ -96,18 +98,18 @@ def display_results(result: RenameResult) -> None:
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
-@click.option(
+@option(
     "--version",
     "-V",
     is_flag=True,
     help="Show version and exit.",
 )
-@click.option(
+@option(
     "--dry-run",
     is_flag=True,
     help="Preview changes without modifying files.",
 )
-@click.option(
+@option(
     "--yes",
     "-y",
     is_flag=True,
