@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rename_project"
-version = "0.1.1"
+version = "0.1.2"
 description = "A tool for renaming projects"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -125,3 +125,13 @@ patterns = [
   ".cache",
   "result",
 ]
+
+[tool.importlinter]
+# The bmk gate runs lint-imports unconditionally; with no config at all it
+# aborts with "Could not read any configuration" and fails the whole gate.
+root_package = "rename_project"
+
+[[tool.importlinter.contracts]]
+name = "Architecture layers"
+type = "layers"
+layers = ["rename_project.cli", "rename_project.renamer | rename_project.safe_console | rename_project.typed_click"]
