@@ -221,9 +221,7 @@ OLD_PROJECT = "old-project"
         assert (project_dir / "src" / "new_project").exists()
 
         # Check content replaced
-        content = (project_dir / "src" / "new_project" / "__init__.py").read_text(
-            encoding="utf-8"
-        )
+        content = (project_dir / "src" / "new_project" / "__init__.py").read_text(encoding="utf-8")
         assert "new_project module" in content
         assert "from new_project.utils import NewProject" in content
         assert 'NEW_PROJECT = "new-project"' in content

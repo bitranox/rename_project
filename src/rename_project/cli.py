@@ -19,9 +19,11 @@ from rename_project.renamer import (
     rename_project,
 )
 
+from . import safe_console
+from .safe_console import safe_stream
 from .typed_click import option
 
-console = Console()
+console = Console(file=safe_stream())
 
 
 def display_preview(
@@ -129,7 +131,7 @@ def main(*, version: bool, dry_run: bool, yes: bool) -> None:
       - PascalCase (MyProject)
     """
     if version:
-        click.echo(f"rename-project {__version__}")
+        safe_console.echo(f"rename-project {__version__}")
         sys.exit(0)
 
     root = Path.cwd()

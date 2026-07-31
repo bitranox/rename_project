@@ -305,9 +305,7 @@ def rename_path(path: Path, replacements: dict[str, str]) -> Path | None:
     return None
 
 
-def _check_file_for_modifications(
-    file_path: Path, replacements: dict[str, str]
-) -> bool:
+def _check_file_for_modifications(file_path: Path, replacements: dict[str, str]) -> bool:
     """Check if a file would be modified during dry run."""
     if is_binary_file(file_path):
         return False
