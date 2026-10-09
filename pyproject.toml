@@ -24,15 +24,15 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "rich-click>=1.9.8",
+    "rich-click>=1.9.9",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.5",
-    "pyright>=1.1.411",
+    "ruff>=0.16.10",
+    "pyright>=1.1.414",
 ]
 
 [project.scripts]
