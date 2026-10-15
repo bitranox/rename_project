@@ -5,6 +5,8 @@ the [Keep a Changelog](https://keepachangelog.com/) format.
 
 ## [Unreleased]
 
+## [0.1.3] 2026-10-15 14:19:04
+
 ### Added
 - Python 3.15 is a supported version: declared in the classifiers, so `make test-all` runs it.
 - `uv.lock` is committed, and `[tool.uv] exclude-newer` sets a cooldown that keeps releases younger
