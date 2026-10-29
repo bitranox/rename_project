@@ -5,7 +5,7 @@ the [Keep a Changelog](https://keepachangelog.com/) format.
 
 ## [Unreleased]
 
-## [0.1.3] 2026-10-15 14:19:04
+## [0.1.3] - 2026-10-15
 
 ### Added
 - Python 3.15 is a supported version: declared in the classifiers, so `make test-all` runs it.
@@ -16,7 +16,7 @@ the [Keep a Changelog](https://keepachangelog.com/) format.
 - The install section explains why installing with uv protects against supply-chain attacks and why
   a plain `pip install` does not.
 
-## [0.1.2] 2026-08-01
+## [0.1.2] - 2026-08-01
 
 ### Fixed
 
