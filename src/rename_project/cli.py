@@ -11,6 +11,7 @@ from rich.table import Table
 
 from rename_project import __version__
 from rename_project.renamer import (
+    DuplicateScriptError,
     RenameResult,
     generate_name_variations,
     get_new_name_from_directory,
@@ -99,6 +100,17 @@ def display_results(result: RenameResult) -> None:
     console.print(f"\n[bold]Total changes: {total}[/bold]")
 
 
+def _preview(root: Path) -> RenameResult:
+    """Run the dry-run pass, exiting 1 when the rename must be refused."""
+    try:
+        return rename_project(root, dry_run=True)
+    except DuplicateScriptError as e:
+        # markup=False: the message names the "[project.scripts]" table, which
+        # Rich would otherwise parse as a style tag and drop.
+        console.print(f"Error: {e}", style="red", markup=False)
+        sys.exit(1)
+
+
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @option(
     "--version",
@@ -163,12 +175,12 @@ def main(*, version: bool, dry_run: bool, yes: bool) -> None:
 
     if dry_run:
         console.print("[yellow](Dry run - no changes will be made)[/yellow]")
-        result = rename_project(root, dry_run=True)
+        result = _preview(root)
         display_preview(old_name, new_name, result)
         return
 
     # Preview changes
-    preview_result = rename_project(root, dry_run=True)
+    preview_result = _preview(root)
     display_preview(old_name, new_name, preview_result)
 
     total_changes = (

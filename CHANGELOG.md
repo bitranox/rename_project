@@ -5,6 +5,17 @@ the [Keep a Changelog](https://keepachangelog.com/) format.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A one-word new name no longer leaves an unparsable `pyproject.toml`.** A project whose
+  `[project.scripts]` table holds both spellings of its name (`my_tool` and `my-tool`, as the
+  bitranox CLI template does) got two identical `foo = ...` keys when renamed to a one-word name
+  such as `foo`, and any TOML reader then failed with "Cannot overwrite a value". The rename now
+  drops a script entry that repeats an earlier one with the same name and the same target, and
+  leaves every other byte of the file as it was. If the two entries would share a name but start
+  different targets, the rename is refused with an error naming both targets, before any file is
+  changed.
+
 ## [0.1.3] - 2026-10-15
 
 ### Added

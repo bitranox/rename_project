@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import re
 from dataclasses import dataclass, field
 from pathlib import Path  # noqa: TC003 - needed at runtime for dataclass
@@ -305,6 +306,110 @@ def rename_path(path: Path, replacements: dict[str, str]) -> Path | None:
     return None
 
 
+_SCRIPTS_HEADER = "[project.scripts]"
+
+# One `key = "target"` line: a bare or quoted key, a single- or double-quoted
+# target without escapes, and an optional trailing comment. Anything else in the
+# table (comments, blank lines, escaped strings) is left untouched.
+_SCRIPT_ENTRY = re.compile(
+    r"""\s*(?:(?P<bare>[A-Za-z0-9_-]+)|"(?P<dq_key>[^"\\]*)"|'(?P<sq_key>[^']*)')"""
+    r"""\s*=\s*(?:"(?P<dq_val>[^"\\]*)"|'(?P<sq_val>[^']*)')\s*(?:#.*)?"""
+)
+
+
+class DuplicateScriptError(ValueError):
+    """Two [project.scripts] entries share a name but start different targets."""
+
+
+def _parse_script_entry(line: str) -> tuple[str, str] | None:
+    """Return (name, target) for a simple script entry line, else None."""
+    match = _SCRIPT_ENTRY.fullmatch(line.rstrip("\r\n"))
+    if match is None:
+        return None
+    name = match.group("bare") or match.group("dq_key") or match.group("sq_key") or ""
+    target = match.group("dq_val") or match.group("sq_val") or ""
+    return name, target
+
+
+def _is_table_header(line: str) -> bool:
+    return line.lstrip().startswith("[")
+
+
+def dedupe_project_scripts(content: str) -> str:
+    """Drop [project.scripts] entries that exactly repeat an earlier one.
+
+    A rename to a one-word name maps keys such as ``my_tool`` and ``my-tool``
+    onto the same key, which TOML forbids. An entry with the same name AND the
+    same target as an earlier one is removed; every other byte is kept.
+
+    Args:
+        content: The text of a pyproject.toml.
+
+    Returns:
+        The text with exact duplicate script entries removed.
+
+    Raises:
+        DuplicateScriptError: If a name repeats with a different target, since
+            dropping either entry would silently change which code runs.
+
+    Examples:
+        >>> text = '[project.scripts]\\nfoo = "foo:main"\\nfoo = "foo:main"\\n'
+        >>> dedupe_project_scripts(text)
+        '[project.scripts]\\nfoo = "foo:main"\\n'
+    """
+    # StringIO splits on "\n" only, so CRLF and other separators stay in each line.
+    lines = io.StringIO(content).readlines()
+    kept: list[str] = []
+    seen: dict[str, str] = {}
+    in_scripts = False
+    for line in lines:
+        if _is_table_header(line):
+            in_scripts = line.split("#", 1)[0].strip() == _SCRIPTS_HEADER
+        entry = _parse_script_entry(line) if in_scripts else None
+        if entry is not None and _is_repeat(entry, seen):
+            continue
+        kept.append(line)
+    return "".join(kept)
+
+
+def _is_repeat(entry: tuple[str, str], seen: dict[str, str]) -> bool:
+    """Record an entry; True if it repeats an earlier one exactly."""
+    name, target = entry
+    if name not in seen:
+        seen[name] = target
+        return False
+    earlier = seen[name]
+    if earlier == target:
+        return True
+    raise DuplicateScriptError(
+        f"[project.scripts] would define '{name}' twice with different targets "
+        f"('{earlier}' and '{target}'); rename one of them first."
+    )
+
+
+def _check_renamed_scripts(pyproject: Path, replacements: dict[str, str]) -> None:
+    """Raise DuplicateScriptError if renaming would collide two script targets."""
+    if not pyproject.is_file():
+        return
+    content = pyproject.read_text(encoding="utf-8")
+    for old, new in replacements.items():
+        content = content.replace(old, new)
+    dedupe_project_scripts(content)
+
+
+def _dedupe_scripts_in_place(pyproject: Path) -> None:
+    """Rewrite pyproject.toml without exact duplicate script entries."""
+    if not pyproject.is_file():
+        return
+    # newline="" on both ends: no line-ending translation, so the only bytes
+    # that change are the dropped lines.
+    with pyproject.open(encoding="utf-8", newline="") as handle:
+        content = handle.read()
+    deduped = dedupe_project_scripts(content)
+    if deduped != content:
+        pyproject.write_text(deduped, encoding="utf-8", newline="")
+
+
 def _check_file_for_modifications(file_path: Path, replacements: dict[str, str]) -> bool:
     """Check if a file would be modified during dry run."""
     if is_binary_file(file_path):
@@ -395,8 +500,15 @@ def rename_project(
     # Create replacement map
     replacements = create_replacement_map(old_vars, new_vars)
 
+    # Refuse a conflicting script name before anything is written, so a refusal
+    # leaves the project exactly as it was (the CLI previews with dry_run first).
+    pyproject = root / "pyproject.toml"
+    _check_renamed_scripts(pyproject, replacements)
+
     # Process file contents (deepest first)
     files_modified = _process_file_contents(root, exclude, replacements, dry_run)
+    if not dry_run:
+        _dedupe_scripts_in_place(pyproject)
 
     # Rename files and directories (deepest first)
     files_renamed, dirs_renamed = _rename_paths(root, exclude, replacements, dry_run)

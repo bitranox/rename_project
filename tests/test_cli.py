@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import pytest
+
+if sys.version_info >= (3, 11):
+    import tomllib
 
 if TYPE_CHECKING:
     from click.testing import CliRunner
@@ -225,3 +231,96 @@ OLD_PROJECT = "old-project"
         assert "new_project module" in content
         assert "from new_project.utils import NewProject" in content
         assert 'NEW_PROJECT = "new-project"' in content
+
+
+# A pyproject shaped like bitranox_template_py_cli's: two [project.scripts] keys
+# that differ only in separator, so a ONE-WORD new name maps both onto one key.
+_TEMPLATE_PYPROJECT = """\
+[project]
+name = "bitranox_template_py_cli"
+version = "1.0.0"
+
+[project.scripts]
+# both spellings start the same CLI
+bitranox_template_py_cli = "bitranox_template_py_cli.entry:main"
+bitranox-template-py-cli = "bitranox_template_py_cli.entry:main"
+
+[tool.example]
+setting = "bitranox-template-py-cli"
+"""
+
+_RENAMED_PYPROJECT = """\
+[project]
+name = "foo"
+version = "1.0.0"
+
+[project.scripts]
+# both spellings start the same CLI
+foo = "foo.entry:main"
+
+[tool.example]
+setting = "foo"
+"""
+
+
+def _make_template_project(root: Path, pyproject: str) -> Path:
+    """Create a one-word-named project dir holding the given pyproject."""
+    project_dir = root / "foo"
+    package = project_dir / "src" / "bitranox_template_py_cli"
+    package.mkdir(parents=True)
+    (package / "entry.py").write_text("def main() -> None: ...\n", encoding="utf-8")
+    (project_dir / "pyproject.toml").write_text(pyproject, encoding="utf-8")
+    return project_dir
+
+
+class TestOneWordRename:
+    """A one-word new name collapses the template's two script keys into one."""
+
+    def test_duplicate_script_key_is_dropped(
+        self, cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The renamed pyproject keeps one key and every other byte unchanged."""
+        project_dir = _make_template_project(tmp_path, _TEMPLATE_PYPROJECT)
+        monkeypatch.chdir(project_dir)
+
+        result = cli_runner.invoke(main, ["--yes"])
+
+        assert result.exit_code == 0, result.output
+        pyproject = (project_dir / "pyproject.toml").read_bytes()
+        assert pyproject == _RENAMED_PYPROJECT.encode("utf-8")
+        assert (project_dir / "src" / "foo" / "entry.py").exists()
+
+    def test_renamed_pyproject_parses_as_toml(
+        self, cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The result is valid TOML with the single script entry."""
+        if sys.version_info < (3, 11):
+            pytest.skip("tomllib is in the standard library from Python 3.11")
+        project_dir = _make_template_project(tmp_path, _TEMPLATE_PYPROJECT)
+        monkeypatch.chdir(project_dir)
+
+        result = cli_runner.invoke(main, ["--yes"])
+
+        assert result.exit_code == 0, result.output
+        text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
+        parsed = tomllib.loads(text)
+        assert parsed["project"]["scripts"] == {"foo": "foo.entry:main"}
+
+    def test_duplicate_key_with_different_target_is_refused(
+        self, cli_runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Two keys collapsing onto one name with different targets stop the rename."""
+        conflicting = _TEMPLATE_PYPROJECT.replace(
+            'bitranox-template-py-cli = "bitranox_template_py_cli.entry:main"',
+            'bitranox-template-py-cli = "bitranox_template_py_cli.other:run"',
+        )
+        project_dir = _make_template_project(tmp_path, conflicting)
+        monkeypatch.chdir(project_dir)
+
+        result = cli_runner.invoke(main, ["--yes"])
+
+        assert result.exit_code == 1
+        assert "[project.scripts]" in result.output
+        assert "'foo'" in result.output
+        assert (project_dir / "pyproject.toml").read_text(encoding="utf-8") == conflicting
+        assert (project_dir / "src" / "bitranox_template_py_cli").exists()

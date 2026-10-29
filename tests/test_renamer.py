@@ -8,9 +8,11 @@ import pytest
 
 from rename_project.renamer import (
     EXCLUDE_DIRS,
+    DuplicateScriptError,
     NameVariations,
     RenameResult,
     create_replacement_map,
+    dedupe_project_scripts,
     generate_name_variations,
     get_new_name_from_directory,
     get_old_name_from_pyproject,
@@ -431,3 +433,31 @@ class TestRenameResultDataclass:
         assert result.files_modified == []
         assert result.files_renamed == []
         assert result.dirs_renamed == []
+
+
+class TestDedupeProjectScripts:
+    """Tests for dedupe_project_scripts."""
+
+    def test_drops_exact_repeat_and_keeps_crlf(self) -> None:
+        """A repeated entry goes; every other line keeps its CRLF ending."""
+        text = '[project.scripts]\r\nfoo = "foo:main"\r\nfoo = "foo:main"\r\n'
+        assert dedupe_project_scripts(text) == '[project.scripts]\r\nfoo = "foo:main"\r\n'
+
+    def test_quoted_and_bare_key_are_one_name(self) -> None:
+        """TOML treats "foo" and foo as the same key, so the repeat is dropped."""
+        text = '[project.scripts]\nfoo = \'foo:main\'\n"foo" = "foo:main"  # alias\n'
+        assert dedupe_project_scripts(text) == "[project.scripts]\nfoo = 'foo:main'\n"
+
+    def test_same_key_in_other_tables_is_untouched(self) -> None:
+        """Only the [project.scripts] table is deduplicated."""
+        text = (
+            '[project.scripts]  # entry points\nfoo = "foo:main"\n'
+            '[tool.a]\nfoo = "foo:main"\n[tool.b]\nfoo = "foo:main"\n'
+        )
+        assert dedupe_project_scripts(text) == text
+
+    def test_different_target_is_refused(self) -> None:
+        """A repeated name with another target raises instead of dropping one."""
+        text = '[project.scripts]\nfoo = "foo:main"\nfoo = "foo:other"\n'
+        with pytest.raises(DuplicateScriptError, match="'foo:main' and 'foo:other'"):
+            dedupe_project_scripts(text)
