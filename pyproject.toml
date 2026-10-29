@@ -31,10 +31,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.1.1",
+    "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8.0",
-    "ruff>=0.17.2",
+    "ruff>=0.17.3",
     "pyright>=1.1.414",
 ]
 
@@ -89,6 +89,9 @@ addopts = [
     "-q",
     "--strict-markers",
     "--strict-config",
+]
+markers = [
+    "integration: needs external resources; bmk's make test excludes it by default",
 ]
 
 [tool.coverage.run]
